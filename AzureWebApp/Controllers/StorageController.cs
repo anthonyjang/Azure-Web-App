@@ -11,7 +11,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using AzureWebApp.Libs;
-using AzureWebApp.Model;
 
 namespace AzureWebApp.Controllers
 {
@@ -28,20 +27,20 @@ namespace AzureWebApp.Controllers
             Logger = logger;
         }
 
-        // GET storage/async
+        /// <summary>
+        /// GET storage/async
+        /// Get random files on storage
+        /// </summary>
+        /// <param name="name">name prefix of the blob</param>
+        /// <returns></returns> 
         [HttpGet("async")]
-        public async Task<IActionResult> GetAsync([FromQuery]string name, [FromQuery]int minnumthread = 300)
+        public async Task<IActionResult> GetAsync([FromQuery]string name)
         {
-            if (!SetMinThreads(minnumthread, minnumthread))
-            {
-                throw new Exception("Failed to set min number of thread");
-            }
-
             string returnString = string.Empty;
             int? statusCode = Microsoft.AspNetCore.Http.StatusCodes.Status200OK;
 
             Random random = new Random();
-            string fileName = string.Format("{0}-{1}.DCM", name, random.Next(119, 321));
+            string fileName = string.Format("{0}-{1}.data", name, random.Next(1, 50));
 
             Stopwatch stopWatch = new Stopwatch();
             stopWatch.Start();
@@ -52,12 +51,12 @@ namespace AzureWebApp.Controllers
                 if (await GetBlob(fileName, msStream))
                 {
                     msStream.Position = 0;
-                    // Test reading from the stream //////////////////////////////////
+
+                    // Enable the code below to read from the stream
                     //StreamReader reader = new StreamReader(msStream);
                     //var returnBlob = await reader.ReadToEndAsync();
-                    //////////////////////////////////////////////////////////////////
-
-                    // Test writing the stream to file ///////////////////////////////
+                    
+                    // Enable the code below to write the stream to file
                     //var tempPath = System.IO.Path.GetTempPath();
                     //var tempFile = string.Format(@"{0}{1}", tempPath, fileName);
                     //
@@ -75,7 +74,6 @@ namespace AzureWebApp.Controllers
                     //{
                     //    Logger.LogError("GetAsync - Reading {0} failed", fileName);
                     //}
-                    //////////////////////////////////////////////////////////////////
                     
                     returnString = string.Format("Downloading {0} success", fileName);
                 }
@@ -102,20 +100,20 @@ namespace AzureWebApp.Controllers
             };
         }
 
-        // GET storage/async
-        [HttpGet("dicomjson")]
-        public async Task<IActionResult> GetDicomJson([FromQuery]string name, [FromQuery]int minnumthread = 300)
+        /// <summary>
+        /// GET storage/jsondata
+        /// Access random Json data started with string defined on name parameter on blob storage
+        /// </summary>
+        /// <param name="name">prefix of the json file name</param>
+        /// <returns></returns> 
+        [HttpGet("jsondata")]
+        public async Task<IActionResult> GetJsonData([FromQuery]string name)
         {
-            if (!SetMinThreads(minnumthread, minnumthread))
-            {
-                throw new Exception("Failed to set min number of thread");
-            }
-
             string returnString = string.Empty;
             int? statusCode = Microsoft.AspNetCore.Http.StatusCodes.Status200OK;
 
             Random random = new Random();
-            string fileName = string.Format("{0}{1}", name, random.Next(1, 50));
+            string fileName = string.Format("{0}-{1}.json", name, random.Next(1, 50));
 
             Stopwatch stopWatch = new Stopwatch();
             stopWatch.Start();
@@ -128,18 +126,18 @@ namespace AzureWebApp.Controllers
                     msStream.Position = 0;
                     StreamReader reader = new StreamReader(msStream);
                     var jsonBlob = await reader.ReadToEndAsync();
-                    string sopInstanceUID = string.Empty;
+                    string valueOnKey = string.Empty;
 
                     using (var JsonDoc = JsonDocument.Parse(jsonBlob))
                     {
                         var root = JsonDoc.RootElement;
                         if (!root.Equals(default(JsonElement)))
                         {
-                            sopInstanceUID = root.GetProperty("00080018").GetProperty("Value")[0].ToString();
+                            valueOnKey = root.GetProperty("Key").GetProperty("Value")[0].ToString();
                         }
                     }
 
-                    returnString = string.Format("FileName = {0}, SOPInstanceUID = {1}", fileName, sopInstanceUID);
+                    returnString = string.Format("FileName = {0}, Value = {1}", fileName, valueOnKey);
                 }
                 else
                 {
@@ -147,11 +145,11 @@ namespace AzureWebApp.Controllers
                 }
 
                 stopWatch.Stop();
-                Logger.LogInformation("GetDicomJson call with {0} took {1} ms", fileName, stopWatch.ElapsedMilliseconds);
+                Logger.LogInformation("GetJsonData call with {0} took {1} ms", fileName, stopWatch.ElapsedMilliseconds);
             }
             catch (Exception ex)
             {
-                Logger.LogError("Excption on GetDicomJson call with {0} : {1}", fileName, ex.Message);
+                Logger.LogError("Excption on GetJsonData call with {0} : {1}", fileName, ex.Message);
                 statusCode = Microsoft.AspNetCore.Http.StatusCodes.Status500InternalServerError;
                 returnString = ex.Message;
             }
@@ -170,17 +168,11 @@ namespace AzureWebApp.Controllers
             blobEntry.StreamObject = stream;
             blobEntry.StorageProviderConnectionString = Configuration["azureProviderConnectionString"]?.ToString();
             blobEntry.ContainerName = Configuration["ContainerName"]?.ToString();
-            blobEntry.UseAzureStorage = true;
             blobEntry.StorageAccountName = Configuration["StorageAccountName"]?.ToString();
             
-            AzureStorage azureStorage = new AzureStorage(Logger);
+            StorageAccessLayer azureStorage = new StorageAccessLayer(Logger);
             // Call Azure methods for DownLoad Stream 
             return await azureStorage.DownLoadStreamFromBlobStorage(blobEntry, name);
-        }
-
-        private bool SetMinThreads(int valueCPU, int valueIO)
-        {
-            return ThreadPool.SetMinThreads(valueCPU, valueIO);
         }
     }
 }

@@ -34,16 +34,17 @@ namespace AzureWebApp.Controllers
                 EnableCache = false;
             }
         }
-        
-        // GET database/async
-        [HttpGet("async")]
-        public async Task<IActionResult> GetAsync([FromQuery]string name, [FromQuery]int recordCount = defaultRecordCount, [FromQuery]int minnumthread = 300)
-        {
-            if (!SetMinThreads(minnumthread, minnumthread))
-            {
-                throw new Exception("Failed to set min number of thread");
-            }
 
+        /// <summary>
+        /// GET database/async
+        /// Query DB async and get values from table with name
+        /// </summary>
+        /// <param name="name">value category</param>
+        /// <param name="recordCount"></param>
+        /// <returns></returns>
+        [HttpGet("async")]
+        public async Task<IActionResult> GetAsync([FromQuery]string name, [FromQuery]int recordCount = defaultRecordCount)
+        {       
             string returnString = string.Empty;
             int? statusCode = Microsoft.AspNetCore.Http.StatusCodes.Status200OK;
 
@@ -60,7 +61,7 @@ namespace AzureWebApp.Controllers
                 }
                 else
                 {
-                    using (QueryExecutor queryExecutor = new QueryExecutor(Configuration["Data:DefaultConnection:ConnectionString"], Logger))
+                    using (QueryExecutor queryExecutor = new QueryExecutor(Configuration["Data:DefaultConnection:ConnectionString"]))
                     {
                         var returnList = await queryExecutor.QueryAsync<object>(
                             GetQuery(recordCount),
@@ -102,52 +103,11 @@ namespace AzureWebApp.Controllers
             };
         }
 
-        [HttpGet("threadinfo")]
-        public IActionResult Get()
-        {
-            int availableWorker, availableIO;
-            int maxWorker, maxIO;
-            int minWorker, minIOC;
-            
-            ThreadPool.GetAvailableThreads(out availableWorker, out availableIO);
-            ThreadPool.GetMaxThreads(out maxWorker, out maxIO);
-            ThreadPool.GetMinThreads(out minWorker, out minIOC);
-
-            string returnString = JsonSerializer.Serialize(new 
-            {
-                AvailableWorkerThreads = availableWorker,
-                MaxWorkerThreads = maxWorker,
-                MaxIOThreads = maxIO,
-                MinWorkerThreads = minWorker,
-                MinIOC = minIOC,
-                OccupiedThreads = maxWorker - availableWorker
-            });
-
-            return new ContentResult()
-            {
-                Content = returnString,
-                StatusCode = Microsoft.AspNetCore.Http.StatusCodes.Status200OK,
-                ContentType = "application/fhir+json;charset=utf-8"
-            };
-        }
-
-        [HttpPost("minnumthread")]
-        public void PostMinNumThread([FromBody] int value)
-        {
-            if (!SetMinThreads(value, value))
-            {
-                throw new Exception("Failed to set min number of thread");
-            }
-        }
-
-        private bool SetMinThreads(int valueCPU, int valueIO)
-        {
-            //int minWorker, minIOC;
-            //ThreadPool.GetMinThreads(out minWorker, out minIOC);
-
-            return ThreadPool.SetMinThreads(valueCPU, valueIO);
-        }
-
+        /// <summary>
+        /// Method to compose SQL 
+        /// </summary>
+        /// <param name="count"></param>
+        /// <returns></returns>
         private IQuery GetQuery(int count)
         {
             IQuery query = new SelectQuery()
@@ -162,7 +122,7 @@ namespace AzureWebApp.Controllers
                 },
                 skip = 0,
                 take = count,
-                from = "[fhir].[valueset_view]",
+                from = "[dbo].[valueset_view]",
                 where = new LogicalExpression()
                 {
                     expression = new EqualExpression<string>()
